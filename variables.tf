@@ -5,9 +5,9 @@ variable "aws_region" {
 }
 
 variable "instance_type" {
-  description = "Tipo da instância EC2. t3.micro é elegível ao Free Tier (750h/mês nos primeiros 12 meses)."
+  description = "Tipo da instância EC2. t3.micro (Free Tier) se mostrou insuficiente na prática: mesmo após reboot limpo, rodar o control-plane do Kind + 2 réplicas da aplicação + o init container de migration esgota memória/CPU e derruba a conectividade. t3.small (fora do Free Tier, custo baixo) resolve isso."
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
 
 variable "cluster_name" {
