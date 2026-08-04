@@ -1,0 +1,93 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.11.4"
+  AWS_REGION: "us-east-2"
+
+jobs:
+  validate:
+    name: Format, validate and plan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform fmt (check)
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -no-color -input=false
+
+  apply:
+    name: Apply (main)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve -input=false
+
+      - name: Fetch kubeconfig from Secrets Manager and push as GitHub secret to oficina-api
+        env:
+          GH_TOKEN: ${{ secrets.OFICINA_API_REPO_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "OFICINA_API_REPO_TOKEN nao configurado — pulei a atualizacao do KUBE_CONFIG no oficina-api. Faca manualmente (ver README)." >&2
+            exit 0
+          fi
+          aws secretsmanager get-secret-value \
+            --region ${{ env.AWS_REGION }} \
+            --secret-id oficina/k8s/kubeconfig \
+            --query SecretString --output text > kubeconfig
+          gh secret set KUBE_CONFIG --repo Williamnasci/oficina-api < kubeconfig
+          rm -f kubeconfig

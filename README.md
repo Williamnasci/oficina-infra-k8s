@@ -20,11 +20,39 @@ O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua 
 
 ## Status
 
-🚧 Em construção. Estrutura de repositório e branch protection configuradas; migração/adaptação do Terraform hoje existente em `oficina-api/infra/terraform` (que já usa o provider `tehcyx/kind`) para provisionar a EC2 + Kind remotamente é o próximo passo do roteiro.
+✅ Terraform completo: EC2 `t3.micro` (Ubuntu 24.04) com `user_data` que instala Docker + kubectl + Kind, sobe o cluster e publica o kubeconfig externo (com o IP público já embutido) no Secrets Manager (`oficina/k8s/kubeconfig`). Acesso operacional via **SSM Session Manager** (sem SSH/chave). Ainda não aplicado contra a conta AWS real — ver seção abaixo. API Gateway fica para depois que a Lambda de auth existir (ver roteiro no `oficina-api`).
 
 ## Deploy e execução
 
-_A preencher assim que o pipeline de CI/CD e o deploy estiverem funcionais._
+### Pré-requisitos (uma vez só)
+
+1. Bucket S3 de backend remoto (compartilhado com `oficina-infra-database`) — ver instruções no `oficina-api` (`docs/phase-3-plan.md`).
+2. Secrets do repositório GitHub:
+   - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` — credenciais IAM (não root) com permissão para EC2, IAM (role/instance profile) e Secrets Manager.
+   - `OFICINA_API_REPO_TOKEN` (opcional) — Personal Access Token com escopo `repo` sobre `Williamnasci/oficina-api`, usado pela pipeline para publicar automaticamente o `KUBE_CONFIG` gerado como secret naquele repositório. Sem isso, copie manualmente (comando abaixo).
+
+### Local
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply
+
+# depois do apply (leva alguns minutos até o user_data terminar):
+aws secretsmanager get-secret-value --secret-id oficina/k8s/kubeconfig --query SecretString --output text > kubeconfig
+gh secret set KUBE_CONFIG --repo Williamnasci/oficina-api < kubeconfig
+```
+
+### CI/CD
+
+`.github/workflows/terraform.yml`: `terraform plan` em todo PR; `terraform apply` automático ao mergear em `main`, seguido de push automático do `KUBE_CONFIG` para o `oficina-api` (se `OFICINA_API_REPO_TOKEN` estiver configurado).
+
+### Acesso operacional (debug)
+
+```bash
+aws ssm start-session --target $(terraform output -raw instance_id)
+```
 
 ## Diagrama
 
