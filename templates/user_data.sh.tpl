@@ -34,12 +34,21 @@ if [ -z "$PUBLIC_IP" ]; then
 fi
 
 echo "== gerando config do cluster kind =="
+# certSANs precisa incluir o IP publico, senao o certificado do apiserver so
+# valida para os enderecos internos do Kind (10.96.0.1, IP do container, etc)
+# e qualquer kubectl externo falha na verificacao TLS mesmo conseguindo conectar.
 cat <<KINDCONFIG > /root/kind-config.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 networking:
   apiServerAddress: "0.0.0.0"
   apiServerPort: ${kind_api_server_port}
+kubeadmConfigPatches:
+- |
+  kind: ClusterConfiguration
+  apiServer:
+    certSANs:
+    - "$PUBLIC_IP"
 nodes:
 - role: control-plane
   image: ${kind_node_image}
