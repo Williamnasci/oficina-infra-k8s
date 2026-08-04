@@ -6,7 +6,7 @@ Infraestrutura Kubernetes (via Terraform) do Tech Challenge Fase 3 (POSTECH). Pa
 
 Provisiona, via Terraform, os recursos AWS que dão suporte ao cluster Kubernetes e ao roteamento externo:
 
-- **EC2 `t3.micro`** (Free Tier) hospedando um cluster **Kind** (Kubernetes-in-Docker) com IP público — não Amazon EKS, por decisão de custo registrada e corrigida em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md) (a versão inicial da ADR previa Kind só local no notebook; foi corrigida porque o API Gateway precisa de um alvo de integração alcançável pela rede).
+- **EC2 `t3.small`** hospedando um cluster **Kind** (Kubernetes-in-Docker) com IP público — não Amazon EKS, por decisão de custo registrada em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md). O ADR documenta duas correções: primeiro, Kind precisou sair do notebook (API Gateway precisa de um alvo de rede alcançável); depois, `t3.micro` (Free Tier) se mostrou insuficiente na prática sob carga real, daí `t3.small` (fora do Free Tier, custo baixo).
 - **API Gateway (HTTP API v2)**, com a estratégia de roteamento híbrida (rotas explícitas para auth/health + proxy protegido por Lambda Authorizer para a aplicação) definida em [ADR-0004](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0004-api-gateway-roteamento.md).
 
 O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua no repositório [`oficina-api`](https://github.com/Williamnasci/oficina-api) — este repositório provisiona a infraestrutura onde o cluster roda, não o que roda dentro dele.
@@ -20,9 +20,9 @@ O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua 
 
 ## Status
 
-✅ Aplicado contra a conta AWS real em 2026-08-03: EC2 `t3.micro` (Ubuntu 24.04) rodando Kind, kubeconfig externo publicado no Secrets Manager (`oficina/k8s/kubeconfig`), `kubectl` externo validado com sucesso (node `Ready`, TLS válido). Acesso operacional via **SSM Session Manager** (sem SSH/chave).
+✅ Aplicado contra a conta AWS real: EC2 `t3.small` (Ubuntu 24.04) rodando Kind, kubeconfig externo publicado no Secrets Manager (`oficina/k8s/kubeconfig`), `kubectl` externo validado com sucesso (node `Ready`, TLS válido), aplicação principal implantada e respondendo via NodePort. Acesso operacional via **SSM Session Manager** (sem SSH/chave).
 
-⚠️ **Instabilidade conhecida:** a instância ficou não-responsiva (timeout de handshake TLS, comandos SSM presos) após várias recriações consecutivas nesta sessão — provável esgotamento de créditos de CPU e/ou memória insuficiente (1GB) para um cluster Kind completo em `t3.micro`. Se isso persistir, a correção é subir para `t3.small` (sai do Free Tier, custo pequeno). API Gateway fica para depois que a Lambda de auth existir (ver roteiro no `oficina-api`).
+A instância original (`t3.micro`, Free Tier) ficou não-responsiva sob carga real (control-plane do Kind + réplicas da aplicação), mesmo após reboot — ver a correção registrada em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md). `t3.small` resolveu. API Gateway ainda não implementado (depende da Lambda de auth — ver roteiro no `oficina-api`).
 
 ## Deploy e execução
 
