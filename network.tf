@@ -30,7 +30,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh_from_allowed_cidrs" {
   from_port         = 22
   to_port           = 22
   ip_protocol       = "tcp"
-  description       = "SSH — nao usado por padrao; acesso operacional real e via SSM Session Manager"
+  description       = "SSH - nao usado por padrao; acesso operacional real e via SSM Session Manager"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "app_nodeport_from_allowed_cidrs" {
@@ -41,7 +41,7 @@ resource "aws_vpc_security_group_ingress_rule" "app_nodeport_from_allowed_cidrs"
   from_port         = var.app_node_port
   to_port           = var.app_node_port
   ip_protocol       = "tcp"
-  description       = "NodePort da aplicacao — alvo de integracao do API Gateway (ver ADR-0004 no oficina-api)"
+  description       = "NodePort da aplicacao - alvo de integracao do API Gateway (ver ADR-0004 no oficina-api)"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "kube_api_from_allowed_cidrs" {
@@ -52,5 +52,5 @@ resource "aws_vpc_security_group_ingress_rule" "kube_api_from_allowed_cidrs" {
   from_port         = var.kind_api_server_port
   to_port           = var.kind_api_server_port
   ip_protocol       = "tcp"
-  description       = "API server do Kind — usado pela pipeline de CI/CD do oficina-api (kubectl remoto)"
+  description       = "API server do Kind - usado pela pipeline de CI/CD do oficina-api (kubectl remoto)"
 }
