@@ -45,7 +45,7 @@ resource "aws_vpc_security_group_ingress_rule" "app_nodeport_from_allowed_cidrs"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "kube_api_from_allowed_cidrs" {
-  for_each = toset(var.app_allowed_cidr_blocks)
+  for_each = toset(var.kube_api_allowed_cidr_blocks)
 
   security_group_id = aws_security_group.cluster_host.id
   cidr_ipv4         = each.value
