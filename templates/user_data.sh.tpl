@@ -4,11 +4,17 @@ exec > >(tee /var/log/oficina-bootstrap.log) 2>&1
 
 echo "== instalando dependencias =="
 apt-get update -y
-apt-get install -y docker.io awscli curl
+apt-get install -y docker.io curl unzip
 
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ubuntu
+
+echo "== instalando aws cli v2 (nao disponivel via apt no Ubuntu 24.04) =="
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws
 
 echo "== instalando kubectl =="
 KUBECTL_VERSION="$(curl -Ls https://dl.k8s.io/release/stable.txt)"

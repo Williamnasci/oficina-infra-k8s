@@ -37,6 +37,16 @@ resource "aws_instance" "cluster_host" {
   })
   user_data_replace_on_change = true
 
+  # data.aws_ami.ubuntu usa most_recent = true, que resolve para uma AMI diferente
+  # sempre que a Canonical publica uma nova build - sem isso, qualquer terraform
+  # apply futuro (inclusive o job automatico de CI/CD em push para main) pode
+  # substituir a instancia de forma inesperada so por causa de uma AMI mais nova,
+  # mesmo sem nenhuma mudanca de configuracao real. A AMI mais recente ainda e
+  # usada na criacao inicial; depois disso, fica congelada.
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   tags = {
     Name = "${var.cluster_name}-cluster-host"
   }
