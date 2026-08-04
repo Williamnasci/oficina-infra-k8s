@@ -25,7 +25,13 @@ echo "== instalando kind =="
 curl -Lo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64"
 chmod +x /usr/local/bin/kind
 
-PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PUBLIC_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+
+if [ -z "$PUBLIC_IP" ]; then
+  echo "FATAL: could not resolve public IP via IMDSv2" >&2
+  exit 1
+fi
 
 echo "== gerando config do cluster kind =="
 cat <<KINDCONFIG > /root/kind-config.yaml
