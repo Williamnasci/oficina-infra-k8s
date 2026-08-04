@@ -47,7 +47,9 @@ echo "== criando cluster kind (nome: ${cluster_name}) =="
 kind create cluster --name "${cluster_name}" --config /root/kind-config.yaml --wait 180s
 
 echo "== gerando kubeconfig externo (server = IP publico da EC2) =="
-kind get kubeconfig --name "${cluster_name}" | sed "s/127.0.0.1/$PUBLIC_IP/" > /root/kubeconfig
+# apiServerAddress "0.0.0.0" faz o kind gravar "0.0.0.0" no kubeconfig (nao
+# sempre 127.0.0.1) - troca qualquer um dos dois pelo IP publico real.
+kind get kubeconfig --name "${cluster_name}" | sed -E "s#(https://)(127\.0\.0\.1|0\.0\.0\.0)(:)#\1$PUBLIC_IP\3#" > /root/kubeconfig
 
 echo "== publicando kubeconfig no Secrets Manager =="
 if aws secretsmanager describe-secret --region "${aws_region}" --secret-id oficina/k8s/kubeconfig >/dev/null 2>&1; then
