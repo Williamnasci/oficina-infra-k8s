@@ -20,7 +20,9 @@ O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua 
 
 ## Status
 
-✅ Terraform completo: EC2 `t3.micro` (Ubuntu 24.04) com `user_data` que instala Docker + kubectl + Kind, sobe o cluster e publica o kubeconfig externo (com o IP público já embutido) no Secrets Manager (`oficina/k8s/kubeconfig`). Acesso operacional via **SSM Session Manager** (sem SSH/chave). Ainda não aplicado contra a conta AWS real — ver seção abaixo. API Gateway fica para depois que a Lambda de auth existir (ver roteiro no `oficina-api`).
+✅ Aplicado contra a conta AWS real em 2026-08-03: EC2 `t3.micro` (Ubuntu 24.04) rodando Kind, kubeconfig externo publicado no Secrets Manager (`oficina/k8s/kubeconfig`), `kubectl` externo validado com sucesso (node `Ready`, TLS válido). Acesso operacional via **SSM Session Manager** (sem SSH/chave).
+
+⚠️ **Instabilidade conhecida:** a instância ficou não-responsiva (timeout de handshake TLS, comandos SSM presos) após várias recriações consecutivas nesta sessão — provável esgotamento de créditos de CPU e/ou memória insuficiente (1GB) para um cluster Kind completo em `t3.micro`. Se isso persistir, a correção é subir para `t3.small` (sai do Free Tier, custo pequeno). API Gateway fica para depois que a Lambda de auth existir (ver roteiro no `oficina-api`).
 
 ## Deploy e execução
 

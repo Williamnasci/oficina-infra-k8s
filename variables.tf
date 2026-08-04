@@ -41,7 +41,22 @@ variable "ssh_allowed_cidr_blocks" {
 }
 
 variable "app_allowed_cidr_blocks" {
-  description = "CIDRs autorizados a alcançar o NodePort da aplicação e a porta do API server do Kind. 0.0.0.0/0 é aceitável aqui porque o tráfego real do cliente final passa pelo API Gateway, não direto nesta porta — mas o valor é explícito, não implícito."
+  description = "CIDRs autorizados a alcançar o NodePort da aplicação (30080). 0.0.0.0/0 é aceitável aqui porque o tráfego real do cliente final passa pelo API Gateway, não direto nesta porta — mas o valor é explícito, não implícito."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "kube_api_allowed_cidr_blocks" {
+  description = <<-EOT
+    CIDRs autorizados a alcançar a porta do API server do Kind (6443) — superfície
+    bem mais sensível que o NodePort da aplicação, por isso é uma variável separada
+    (não reaproveita app_allowed_cidr_blocks). Hoje aberta em 0.0.0.0/0 porque o
+    consumidor é a pipeline de CI/CD do oficina-api rodando em runners hospedados
+    pelo GitHub, cujos IPs de saída são dinâmicos e não documentados como um bloco
+    CIDR restrito e estável o suficiente para uma allowlist confiável. Alternativas
+    mais restritas para endurecer isso depois: runner self-hosted dentro de uma rede
+    conhecida, ou acesso via SSM port-forwarding em vez de kubectl direto.
+  EOT
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
