@@ -61,10 +61,23 @@ KINDCONFIG
 echo "== criando cluster kind (nome: ${cluster_name}) =="
 kind create cluster --name "${cluster_name}" --config /root/kind-config.yaml --wait 180s
 
-echo "== gerando kubeconfig externo (server = IP publico da EC2) =="
+echo "== gerando kubeconfig (server = IP publico da EC2) =="
 # apiServerAddress "0.0.0.0" faz o kind gravar "0.0.0.0" no kubeconfig (nao
-# sempre 127.0.0.1) - troca qualquer um dos dois pelo IP publico real.
+# sempre 127.0.0.1) - troca qualquer um dos dois pelo IP publico real. O
+# certificado do apiserver so tem SAN para 10.96.0.1, o IP interno do
+# container e o IP publico (ver certSANs acima) - nem 0.0.0.0 nem 127.0.0.1
+# validam, entao esse kubeconfig com IP publico e usado tanto local (metrics-
+# server, abaixo) quanto externamente, em vez de gerar dois kubeconfigs.
 kind get kubeconfig --name "${cluster_name}" | sed -E "s#(https://)(127\.0\.0\.1|0\.0\.0\.0)(:)#\1$PUBLIC_IP\3#" > /root/kubeconfig
+
+echo "== instalando metrics-server (necessario para o HPA ler CPU/memoria reais) =="
+kubectl --kubeconfig /root/kubeconfig apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+# Kind usa certificados de kubelet self-signed que o metrics-server nao valida
+# por padrao - sem isso ele fica em CrashLoopBackOff e o HPA nunca sai do
+# estado "unknown" (nao consegue ler metricas reais de CPU/memoria).
+kubectl --kubeconfig /root/kubeconfig patch deployment metrics-server -n kube-system --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+kubectl --kubeconfig /root/kubeconfig rollout status deployment/metrics-server -n kube-system --timeout=120s
 
 echo "== publicando kubeconfig no Secrets Manager =="
 if aws secretsmanager describe-secret --region "${aws_region}" --secret-id oficina/k8s/kubeconfig >/dev/null 2>&1; then
