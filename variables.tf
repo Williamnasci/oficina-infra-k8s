@@ -46,6 +46,12 @@ variable "app_allowed_cidr_blocks" {
   default     = ["0.0.0.0/0"]
 }
 
+variable "log_retention_days" {
+  description = "Retencao dos logs de acesso do API Gateway no CloudWatch."
+  type        = number
+  default     = 14
+}
+
 variable "kube_api_allowed_cidr_blocks" {
   description = <<-EOT
     CIDRs autorizados a alcançar a porta do API server do Kind (6443) — superfície

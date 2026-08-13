@@ -22,3 +22,8 @@ output "security_group_id" {
   description = "ID do security group da EC2."
   value       = aws_security_group.cluster_host.id
 }
+
+output "api_gateway_endpoint" {
+  description = "URL base do API Gateway (HTTP API v2) - ponto de entrada publico da aplicacao (ver ADR-0004 no oficina-api)."
+  value       = aws_apigatewayv2_api.main.api_endpoint
+}
