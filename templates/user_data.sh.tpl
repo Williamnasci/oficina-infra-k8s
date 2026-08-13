@@ -61,6 +61,16 @@ KINDCONFIG
 echo "== criando cluster kind (nome: ${cluster_name}) =="
 kind create cluster --name "${cluster_name}" --config /root/kind-config.yaml --wait 180s
 
+echo "== instalando metrics-server (necessario para o HPA ler CPU/memoria reais) =="
+export KUBECONFIG=/root/.kube/config
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+# Kind usa certificados de kubelet self-signed que o metrics-server nao valida
+# por padrao - sem isso ele fica em CrashLoopBackOff e o HPA nunca sai do
+# estado "unknown" (nao consegue ler metricas reais de CPU/memoria).
+kubectl patch deployment metrics-server -n kube-system --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+kubectl rollout status deployment/metrics-server -n kube-system --timeout=120s
+
 echo "== gerando kubeconfig externo (server = IP publico da EC2) =="
 # apiServerAddress "0.0.0.0" faz o kind gravar "0.0.0.0" no kubeconfig (nao
 # sempre 127.0.0.1) - troca qualquer um dos dois pelo IP publico real.
