@@ -20,9 +20,13 @@ O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua 
 
 ## Status
 
-✅ Aplicado contra a conta AWS real: EC2 `t3.small` (Ubuntu 24.04) rodando Kind, kubeconfig externo publicado no Secrets Manager (`oficina/k8s/kubeconfig`), `kubectl` externo validado com sucesso (node `Ready`, TLS válido), aplicação principal implantada e respondendo via NodePort. Acesso operacional via **SSM Session Manager** (sem SSH/chave).
+✅ Aplicado e validado ponta a ponta contra a conta AWS real: EC2 `t3.small` (Ubuntu 24.04) rodando Kind, kubeconfig externo publicado no Secrets Manager (`oficina/k8s/kubeconfig`), `metrics-server` instalado no bootstrap (HPA validado escalando de 2 para 6 réplicas sob carga real), aplicação principal implantada e respondendo via NodePort. Acesso operacional via **SSM Session Manager** (sem SSH/chave).
 
-A instância original (`t3.micro`, Free Tier) ficou não-responsiva sob carga real (control-plane do Kind + réplicas da aplicação), mesmo após reboot — ver a correção registrada em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md). `t3.small` resolveu. API Gateway ainda não implementado (depende da Lambda de auth — ver roteiro no `oficina-api`).
+**API Gateway (HTTP API v2) implementado e testado** — roteamento híbrido do [ADR-0004](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0004-api-gateway-roteamento.md): `POST /auth/login` e `GET /health` públicas, `ANY /{proxy+}` protegida por Lambda Authorizer (`oficina-lambda-auth`). As duas funções Lambda são referenciadas por `data source` (lookup por nome), sem acoplar os states dos dois repositórios. O `integration_uri` das rotas de proxy usa o IP público da EC2 diretamente do mesmo state, então continua correto automaticamente após recriar a instância.
+
+A instância original (`t3.micro`, Free Tier) ficou não-responsiva sob carga real (control-plane do Kind + réplicas da aplicação), mesmo após reboot — ver a correção registrada em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md). `t3.small` resolveu.
+
+> **Nota de custo:** a EC2 é destruída (`terraform destroy -target=aws_instance.cluster_host`) entre sessões de trabalho para não gerar gasto continuo numa conta pessoal Free Tier. Rodar `terraform apply` recria a instância e as rotas de proxy do API Gateway automaticamente com o IP novo — só é preciso republicar o `KUBE_CONFIG` no `oficina-api` (o kubeconfig muda porque o certificado do apiserver do Kind é gerado por instância).
 
 ## Deploy e execução
 
