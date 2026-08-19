@@ -102,6 +102,14 @@ resource "aws_apigatewayv2_integration" "app_health" {
   integration_type   = "HTTP_PROXY"
   integration_method = "GET"
   integration_uri    = "http://${aws_instance.cluster_host.public_ip}:${var.app_node_port}/health"
+
+  # Propaga o requestId do Gateway como header para a aplicacao. O logger
+  # (nestjs-pino, ver oficina-api) usa esse header como correlation ID em vez
+  # de gerar um novo - correlaciona os access logs do Gateway com os logs da
+  # aplicacao no Datadog usando o mesmo ID.
+  request_parameters = {
+    "overwrite:header.x-request-id" = "$context.requestId"
+  }
 }
 
 resource "aws_apigatewayv2_route" "health" {
@@ -117,6 +125,11 @@ resource "aws_apigatewayv2_integration" "app_proxy" {
   integration_type   = "HTTP_PROXY"
   integration_method = "ANY"
   integration_uri    = "http://${aws_instance.cluster_host.public_ip}:${var.app_node_port}/{proxy}"
+
+  # Ver comentario na integracao app_health - mesmo motivo.
+  request_parameters = {
+    "overwrite:header.x-request-id" = "$context.requestId"
+  }
 }
 
 resource "aws_apigatewayv2_route" "app_protected" {
