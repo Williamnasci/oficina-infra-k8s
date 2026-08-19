@@ -13,3 +13,4 @@ override.tf.json
 terraform.rc
 desktop.ini
 Thumbs.db
+tfplan*

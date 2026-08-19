@@ -1,7 +1,7 @@
 # Copie para terraform.tfvars e ajuste. Nao commitar terraform.tfvars (ja esta no .gitignore).
 
-aws_region    = "us-east-2"
-instance_type = "t3.micro"
+aws_region    = "us-east-1"
+instance_type = "t3.small"
 cluster_name  = "oficina"
 
 # Vazio por padrao — acesso operacional real e via SSM Session Manager, nao SSH.
