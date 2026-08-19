@@ -26,7 +26,7 @@ O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua 
 
 A instância original (`t3.micro`, Free Tier) ficou não-responsiva sob carga real (control-plane do Kind + réplicas da aplicação), mesmo após reboot — ver a correção registrada em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md). `t3.small` resolveu.
 
-> **Nota de custo:** a EC2 é destruída (`terraform destroy -target=aws_instance.cluster_host`) entre sessões de trabalho para não gerar gasto continuo numa conta pessoal Free Tier. Rodar `terraform apply` recria a instância e as rotas de proxy do API Gateway automaticamente com o IP novo — só é preciso republicar o `KUBE_CONFIG` no `oficina-api` (o kubeconfig muda porque o certificado do apiserver do Kind é gerado por instância).
+> **Nota de custo:** a EC2 é destruída (`terraform destroy -target=aws_instance.cluster_host`) entre sessões de trabalho para não gerar gasto continuo numa conta pessoal Free Tier. **Qualquer merge em `main` deste repositório** — inclusive mudanças só de documentação — dispara `terraform apply` automático no CI/CD, que recria a EC2 se ela estiver destruída (o recurso continua declarado no `.tf`, só ausente do state). Não é um bug: é o comportamento correto e esperado de um `apply` declarativo. Na prática, isso significa destruir a EC2 como o **último passo** de uma sessão de trabalho, depois de qualquer merge planejado neste repositório — nunca antes.
 
 ## Deploy e execução
 
@@ -62,4 +62,37 @@ aws ssm start-session --target $(terraform output -raw instance_id)
 
 ## Diagrama
 
-Ver [Diagrama de Componentes](https://github.com/Williamnasci/oficina-api/blob/main/docs/architecture-components.md) no repositório principal.
+Visão focal deste repositório (rede e roteamento — o diagrama completo da solução está no [Diagrama de Componentes](https://github.com/Williamnasci/oficina-api/blob/main/docs/architecture-components.md) do `oficina-api`):
+
+```mermaid
+flowchart TB
+    Client([Cliente])
+
+    subgraph GW["API Gateway HTTP API v2 (este repo)"]
+        Login["POST /auth/login (publica)"]
+        Health["GET /health (publica)"]
+        Proxy["ANY /{proxy+} (protegida)"]
+        Authorizer["Lambda Authorizer"]
+    end
+
+    subgraph EC2["EC2 t3.small (este repo)"]
+        Kind["Cluster Kind"]
+        App["oficina-api (pods)"]
+        MetricsServer["metrics-server"]
+        DatadogAgent["Datadog Agent"]
+    end
+
+    Client --> Login
+    Client --> Health
+    Client --> Proxy
+    Login -->|invoke| LambdaAuth["oficina-auth-login (oficina-lambda-auth)"]
+    Proxy --> Authorizer
+    Authorizer -->|invoke| LambdaVerify["oficina-auth-authorizer (oficina-lambda-auth)"]
+    Health -->|HTTP_PROXY, injeta x-request-id| App
+    Proxy -->|HTTP_PROXY, injeta x-request-id| App
+    App --> Kind
+    MetricsServer -.-> App
+    DatadogAgent -.-> App
+```
+
+O API Gateway injeta `$context.requestId` como header `x-request-id` nas duas integrações HTTP_PROXY (`app_health`, `app_proxy`) — a aplicação (`nestjs-pino`, no `oficina-api`) usa esse header como correlation ID em vez de gerar um novo, então o mesmo ID aparece nos access logs do Gateway (CloudWatch) e nos logs da aplicação (Datadog).
