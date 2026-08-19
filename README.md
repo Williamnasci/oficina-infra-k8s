@@ -54,6 +54,8 @@ gh secret set KUBE_CONFIG --repo Williamnasci/oficina-api < kubeconfig
 
 `.github/workflows/terraform.yml`: `terraform plan` em todo PR; `terraform apply` automático ao mergear em `main`, seguido de push automático do `KUBE_CONFIG` para o `oficina-api` (se `OFICINA_API_REPO_TOKEN` estiver configurado).
 
+`terraform apply` retorna assim que a EC2 fica "running" (segundos), mas o bootstrap real do cluster (`user_data.sh.tpl`) leva minutos. Antes de buscar o `KUBE_CONFIG`, a pipeline espera o secret `oficina/k8s/kubeconfig` ser atualizado com um `LastChangedDate` posterior ao `LaunchTime` da instância atual — evita publicar no `oficina-api` um kubeconfig obsoleto (de uma instância anterior) ou o job falhar tentando ler um secret que ainda não foi escrito. Timeout de 10 minutos.
+
 ### Acesso operacional (debug)
 
 ```bash

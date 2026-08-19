@@ -77,6 +77,56 @@ jobs:
       - name: Terraform apply
         run: terraform apply -auto-approve -input=false
 
+      # terraform apply retorna assim que a EC2 fica "running" na API da AWS -
+      # isso leva segundos. O bootstrap real (user_data.sh.tpl: Docker,
+      # kubectl, kind, criacao do cluster e so entao publicacao do kubeconfig
+      # no Secrets Manager) leva minutos. Buscar o secret logo apos o apply
+      # (sem esperar) e uma race: se a instancia foi RECRIADA, o secret ainda
+      # contem o kubeconfig da instancia ANTERIOR (existe, entao uma checagem
+      # ingenua de "o secret existe?" passaria mesmo estando desatualizado).
+      # A checagem certa e comparar QUANDO o secret mudou pela ultima vez
+      # contra QUANDO a instancia atual subiu - so aceitar um secret alterado
+      # depois do LaunchTime garante que foi ESTA instancia que publicou.
+      - name: Wait for cluster bootstrap to publish a fresh kubeconfig
+        run: |
+          set -euo pipefail
+
+          INSTANCE_ID=$(terraform output -raw instance_id)
+          LAUNCH_TIME=$(aws ec2 describe-instances \
+            --region ${{ env.AWS_REGION }} \
+            --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].LaunchTime' --output text)
+          LAUNCH_EPOCH=$(date -d "$LAUNCH_TIME" +%s)
+
+          echo "Instancia $INSTANCE_ID, LaunchTime=$LAUNCH_TIME. Aguardando kubeconfig publicado apos esse instante..."
+
+          TIMEOUT_SECONDS=600
+          INTERVAL_SECONDS=15
+          ELAPSED=0
+
+          while true; do
+            SECRET_CHANGED=$(aws secretsmanager describe-secret \
+              --region ${{ env.AWS_REGION }} \
+              --secret-id oficina/k8s/kubeconfig \
+              --query 'LastChangedDate' --output text 2>/dev/null || echo "")
+
+            if [ -n "$SECRET_CHANGED" ] && [ "$SECRET_CHANGED" != "None" ]; then
+              SECRET_EPOCH=$(date -d "$SECRET_CHANGED" +%s)
+              if [ "$SECRET_EPOCH" -ge "$LAUNCH_EPOCH" ]; then
+                echo "kubeconfig atualizado em $SECRET_CHANGED (>= LaunchTime) - bootstrap desta instancia concluido."
+                break
+              fi
+            fi
+
+            if [ "$ELAPSED" -ge "$TIMEOUT_SECONDS" ]; then
+              echo "::error::Timeout de ${TIMEOUT_SECONDS}s esperando o bootstrap publicar um kubeconfig novo. A instancia pode ter falhado no user_data - ver /var/log/oficina-bootstrap.log via SSM Session Manager." >&2
+              exit 1
+            fi
+
+            sleep "$INTERVAL_SECONDS"
+            ELAPSED=$((ELAPSED + INTERVAL_SECONDS))
+          done
+
       - name: Fetch kubeconfig from Secrets Manager and push as GitHub secret to oficina-api
         env:
           GH_TOKEN: ${{ secrets.OFICINA_API_REPO_TOKEN }}
