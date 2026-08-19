@@ -26,7 +26,7 @@ O cluster em si (manifests de Deployment, Service, HPA da aplicação) continua 
 
 A instância original (`t3.micro`, Free Tier) ficou não-responsiva sob carga real (control-plane do Kind + réplicas da aplicação), mesmo após reboot — ver a correção registrada em [ADR-0003](https://github.com/Williamnasci/oficina-api/blob/main/docs/adr/0003-cluster-kubernetes-local.md). `t3.small` resolveu.
 
-> **Nota de custo:** a EC2 é destruída (`terraform destroy -target=aws_instance.cluster_host`) entre sessões de trabalho para não gerar gasto continuo numa conta pessoal Free Tier. **Qualquer merge em `main` deste repositório** — inclusive mudanças só de documentação — dispara `terraform apply` automático no CI/CD, que recria a EC2 se ela estiver destruída (o recurso continua declarado no `.tf`, só ausente do state). Não é um bug: é o comportamento correto e esperado de um `apply` declarativo. Na prática, isso significa destruir a EC2 como o **último passo** de uma sessão de trabalho, depois de qualquer merge planejado neste repositório — nunca antes.
+> **Conta AWS Academy Learner Lab (não mais conta pessoal):** este projeto roda numa conta de sandbox do AWS Academy — orçamento fixo de USD 50 para todo o curso, sessão de lab de ~4h (renovável), e a própria plataforma **termina a instância EC2 automaticamente ao fim de cada sessão** (não precisamos mais destruí-la manualmente entre sessões de trabalho). O `LabRole` da conta também não permite criar usuário/role IAM permanente (`iam:CreateUser` é negado) — por isso o CI/CD usa credenciais de sessão temporárias (ver seção CI/CD abaixo) e o `apply` deixou de ser automático no merge.
 
 ## Deploy e execução
 
@@ -34,7 +34,7 @@ A instância original (`t3.micro`, Free Tier) ficou não-responsiva sob carga re
 
 1. Bucket S3 de backend remoto (compartilhado com `oficina-infra-database`) — ver instruções no `oficina-api` (`docs/phase-3-plan.md`).
 2. Secrets do repositório GitHub:
-   - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` — credenciais IAM (não root) com permissão para EC2, IAM (role/instance profile) e Secrets Manager.
+   - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` — credenciais **temporárias** da sessão do AWS Academy Learner Lab (AWS Details → Show, na tela do lab). Expiram com a sessão (~4h) — atualize os 3 secrets antes de rodar o workflow `terraform.yml` manualmente.
    - `OFICINA_API_REPO_TOKEN` (opcional) — Personal Access Token com escopo `repo` sobre `Williamnasci/oficina-api`, usado pela pipeline para publicar automaticamente o `KUBE_CONFIG` gerado como secret naquele repositório. Sem isso, copie manualmente (comando abaixo).
 
 ### Local
@@ -52,7 +52,7 @@ gh secret set KUBE_CONFIG --repo Williamnasci/oficina-api < kubeconfig
 
 ### CI/CD
 
-`.github/workflows/terraform.yml`: `terraform plan` em todo PR; `terraform apply` automático ao mergear em `main`, seguido de push automático do `KUBE_CONFIG` para o `oficina-api` (se `OFICINA_API_REPO_TOKEN` estiver configurado).
+`.github/workflows/terraform.yml`: `terraform plan` roda automático em todo PR e push em `main` (falha com erro de autenticação se os 3 secrets AWS estiverem com a sessão do lab expirada — atualize-os antes de abrir PR/dar push, não é bug). O job `apply` **não roda mais automático no merge** — só via disparo manual (`gh workflow run terraform.yml` ou pela aba Actions do GitHub), porque a conta AWS Academy não permite uma credencial permanente segura para guardar como secret. Ao aplicar com sucesso, o `KUBE_CONFIG` é publicado automaticamente no `oficina-api` (se `OFICINA_API_REPO_TOKEN` estiver configurado).
 
 `terraform apply` retorna assim que a EC2 fica "running" (segundos), mas o bootstrap real do cluster (`user_data.sh.tpl`) leva minutos. Antes de buscar o `KUBE_CONFIG`, a pipeline espera o secret `oficina/k8s/kubeconfig` ser atualizado com um `LastChangedDate` posterior ao `LaunchTime` da instância atual — evita publicar no `oficina-api` um kubeconfig obsoleto (de uma instância anterior) ou o job falhar tentando ler um secret que ainda não foi escrito. Timeout de 10 minutos.
 

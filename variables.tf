@@ -1,7 +1,7 @@
 variable "aws_region" {
-  description = "Região AWS. Fixa em us-east-2 por decisão de projeto (ver docs/rfc/0001-escolha-da-nuvem.md no oficina-api)."
+  description = "Região AWS. us-east-1 - região fixa da conta AWS Academy Learner Lab usada neste projeto (ver docs/rfc/0001-escolha-da-nuvem.md no oficina-api; a migração de us-east-2 para us-east-1 aconteceu ao trocar de conta pessoal para Academy)."
   type        = string
-  default     = "us-east-2"
+  default     = "us-east-1"
 }
 
 variable "instance_type" {
