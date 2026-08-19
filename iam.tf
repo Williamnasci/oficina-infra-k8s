@@ -1,43 +1,18 @@
-data "aws_caller_identity" "current" {}
-
-resource "aws_iam_role" "cluster_host" {
-  name = "${var.cluster_name}-cluster-host-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-# Permite acesso via SSM Session Manager em vez de SSH — sem chave para gerenciar/vazar.
-resource "aws_iam_role_policy_attachment" "ssm_managed_instance" {
-  role       = aws_iam_role.cluster_host.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_role_policy" "publish_kubeconfig" {
-  name = "publish-kubeconfig-secret"
-  role = aws_iam_role.cluster_host.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "secretsmanager:CreateSecret",
-        "secretsmanager:PutSecretValue",
-        "secretsmanager:DescribeSecret",
-      ]
-      Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:oficina/k8s/*"
-    }]
-  })
-}
-
-resource "aws_iam_instance_profile" "cluster_host" {
-  name = "${var.cluster_name}-cluster-host-profile"
-  role = aws_iam_role.cluster_host.name
+# AWS Academy Learner Lab nega iam:CreateRole/iam:PutRolePolicy (mesma
+# restricao de iam:CreateUser ja documentada no README) - nao e possivel
+# criar uma role/policy escopada especificamente para esta EC2 como este
+# repositorio fazia antes. A propria plataforma do Academy pre-provisiona
+# um instance profile compartilhado (LabInstanceProfile, sobre a LabRole)
+# para exatamente esse caso de uso - EC2 precisando de acesso a servicos
+# AWS (aqui: Secrets Manager para publicar o kubeconfig, SSM para acesso
+# via Session Manager). Reaproveitamos ele em vez de criar o proprio.
+#
+# Trade-off real, nao escondido: LabRole tem escopo mais amplo que a role
+# customizada anterior (least privilege especifico deste projeto) - e a
+# role compartilhada de todo o ambiente do lab, cujas permissoes nao
+# controlamos nem podemos restringir (anexar uma policy a ela tambem e
+# negado). Aceitavel no contexto de um sandbox academico descartavel; nao
+# seria numa conta de producao real.
+data "aws_iam_instance_profile" "cluster_host" {
+  name = "LabInstanceProfile"
 }

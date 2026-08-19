@@ -18,7 +18,7 @@ resource "aws_instance" "cluster_host" {
   instance_type          = var.instance_type
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.cluster_host.id]
-  iam_instance_profile   = aws_iam_instance_profile.cluster_host.name
+  iam_instance_profile   = data.aws_iam_instance_profile.cluster_host.name
 
   associate_public_ip_address = true
 
