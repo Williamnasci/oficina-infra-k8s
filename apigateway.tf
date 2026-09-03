@@ -1,11 +1,5 @@
-# API Gateway HTTP API v2 - roteamento hibrido (ADR-0004 no oficina-api):
-# poucas rotas explicitas (auth, health) + proxy protegido para o resto da
-# aplicacao. O gateway so decide quem entra, nao para onde cada endpoint
-# interno vai - a aplicacao continua dona do seu proprio contrato (Swagger).
 
-# --- Lookups cross-repo: funcoes Lambda de autenticacao (oficina-lambda-auth) ---
-# Mesmo padrao usado em oficina-lambda-auth/terraform/main.tf para o secret do
-# RDS: lookup por nome, sem acoplar os dois states diretamente.
+# Cross-repository lookups
 data "aws_lambda_function" "auth_login" {
   function_name = "oficina-auth-login"
 }
@@ -45,7 +39,7 @@ resource "aws_apigatewayv2_stage" "default" {
   }
 }
 
-# --- Rota publica: POST /auth/login -> Lambda auth-login -----------------
+# Public authentication route
 
 resource "aws_apigatewayv2_integration" "auth_login" {
   api_id                 = aws_apigatewayv2_api.main.id
@@ -68,11 +62,7 @@ resource "aws_lambda_permission" "apigw_invoke_auth_login" {
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*/auth/login"
 }
 
-# --- Authorizer: valida o JWT (HS256) via Lambda auth-authorizer ---------
-# REQUEST (nao TOKEN) e CUSTOM (nao JWT nativo) porque o token e assinado com
-# segredo simetrico por uma Lambda propria, nao por um issuer OIDC/JWKS (ver
-# ADR-0004). enable_simple_responses=true porque a Lambda retorna o formato
-# simples {isAuthorized, context}, nao um IAM policy document completo.
+# Authorizer
 resource "aws_apigatewayv2_authorizer" "lambda_auth_verifier" {
   api_id                            = aws_apigatewayv2_api.main.id
   authorizer_type                   = "REQUEST"
@@ -92,10 +82,7 @@ resource "aws_lambda_permission" "apigw_invoke_auth_authorizer" {
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/authorizers/${aws_apigatewayv2_authorizer.lambda_auth_verifier.id}"
 }
 
-# --- Rota publica: GET /health -> aplicacao (NodePort na EC2) ------------
-# Integracao separada da rota protegida (nao reaproveita app_proxy) porque o
-# HTTP_PROXY com {proxy} na URI so faz sentido quando a rota tem o parametro
-# {proxy+}; /health e um caminho fixo.
+# Public health route
 
 resource "aws_apigatewayv2_integration" "app_health" {
   api_id             = aws_apigatewayv2_api.main.id
@@ -103,10 +90,6 @@ resource "aws_apigatewayv2_integration" "app_health" {
   integration_method = "GET"
   integration_uri    = "http://${aws_instance.cluster_host.public_ip}:${var.app_node_port}/health"
 
-  # Propaga o requestId do Gateway como header para a aplicacao. O logger
-  # (nestjs-pino, ver oficina-api) usa esse header como correlation ID em vez
-  # de gerar um novo - correlaciona os access logs do Gateway com os logs da
-  # aplicacao no Datadog usando o mesmo ID.
   request_parameters = {
     "overwrite:header.x-request-id" = "$context.requestId"
   }
@@ -118,7 +101,7 @@ resource "aws_apigatewayv2_route" "health" {
   target    = "integrations/${aws_apigatewayv2_integration.app_health.id}"
 }
 
-# --- Rota protegida: ANY /{proxy+} -> aplicacao, atras do authorizer -----
+# Protected proxy route
 
 resource "aws_apigatewayv2_integration" "app_proxy" {
   api_id             = aws_apigatewayv2_api.main.id
@@ -126,7 +109,6 @@ resource "aws_apigatewayv2_integration" "app_proxy" {
   integration_method = "ANY"
   integration_uri    = "http://${aws_instance.cluster_host.public_ip}:${var.app_node_port}/{proxy}"
 
-  # Ver comentario na integracao app_health - mesmo motivo.
   request_parameters = {
     "overwrite:header.x-request-id" = "$context.requestId"
   }

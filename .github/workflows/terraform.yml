@@ -29,11 +29,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # AWS Academy Learner Lab so fornece credenciais de sessao temporarias
-      # (expiram com a sessao do lab, ~4h) - sem usuario IAM permanente
-      # possivel (iam:CreateUser e negado pelo LabRole). AWS_SESSION_TOKEN
-      # precisa ser atualizado nos secrets do repo toda vez que uma nova
-      # sessao de lab e iniciada (ver README).
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -54,12 +49,6 @@ jobs:
       - name: Terraform plan
         run: terraform plan -no-color -input=false
 
-  # Disparo manual (workflow_dispatch) apenas - AWS Academy Learner Lab nao
-  # permite credencial IAM permanente, entao nao ha secret seguro pra deixar
-  # o apply automatico em todo push/merge (a sessao expira em horas). Rode
-  # manualmente ("gh workflow run terraform.yml" ou pela aba Actions) depois
-  # de atualizar AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN
-  # nos secrets com uma sessao de lab fresca.
   apply:
     name: Apply (manual)
     runs-on: ubuntu-latest
@@ -76,11 +65,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # AWS Academy Learner Lab so fornece credenciais de sessao temporarias
-      # (expiram com a sessao do lab, ~4h) - sem usuario IAM permanente
-      # possivel (iam:CreateUser e negado pelo LabRole). AWS_SESSION_TOKEN
-      # precisa ser atualizado nos secrets do repo toda vez que uma nova
-      # sessao de lab e iniciada (ver README).
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -95,16 +79,6 @@ jobs:
       - name: Terraform apply
         run: terraform apply -auto-approve -input=false
 
-      # terraform apply retorna assim que a EC2 fica "running" na API da AWS -
-      # isso leva segundos. O bootstrap real (user_data.sh.tpl: Docker,
-      # kubectl, kind, criacao do cluster e so entao publicacao do kubeconfig
-      # no Secrets Manager) leva minutos. Buscar o secret logo apos o apply
-      # (sem esperar) e uma race: se a instancia foi RECRIADA, o secret ainda
-      # contem o kubeconfig da instancia ANTERIOR (existe, entao uma checagem
-      # ingenua de "o secret existe?" passaria mesmo estando desatualizado).
-      # A checagem certa e comparar QUANDO o secret mudou pela ultima vez
-      # contra QUANDO a instancia atual subiu - so aceitar um secret alterado
-      # depois do LaunchTime garante que foi ESTA instancia que publicou.
       - name: Wait for cluster bootstrap to publish a fresh kubeconfig
         run: |
           set -euo pipefail
